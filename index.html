@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statisztika</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #f0f8ff; /* Nagyon halvány kék háttér az egész oldalnak */
+            padding: 20px; 
+            color: #333;
+        }
+        .doboz { 
+            background-color: #ffffff; /* Fehér kártyák */
+            padding: 20px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; /* Pici kerekítés */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Nagyon lágy árnyék */
+            border-top: 5px solid #0dcaf0; /* Türkizkék felső csík */
+        }
+        h4 { 
+            color: #087990; /* Sötétebb türkiz a címsoroknak */
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        th { 
+            cursor: pointer; 
+            background-color: #e0f6fd !important; /* Világoskék táblázat fejléc */
+            color: #087990 !important;
+        }
+        th:hover { background-color: #cbf0fa !important; }
+        .gorgetheto { max-height: 280px; overflow-y: auto; }
+        .szam-kiemelo { color: #0dcaf0; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4" style="color: #087990; font-weight: bold;">Tanulói Név Statisztikák</h2>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="doboz">
+                <h4>Leggyakoribb nevek</h4>
+                <p>Családnév: <span id="leg-csaladnev"></span></p>
+                <p>1. Utónév: <span id="leg-utonev1"></span></p>
+                <p>2. Utónév: <span id="leg-utonev2"></span></p>
+                <p>Utónév (összes): <span id="leg-utonev-ossz"></span></p>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="doboz">
+                <h4>3 leggyakoribb név</h4>
+                <ol id="top3-lista" class="ps-3"></ol>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="doboz">
+                <h4>Legritkább nevek (1 db)</h4>
+                <div class="gorgetheto" id="ritka-lista" style="line-height: 1.8;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="doboz">
+                <h4>Családnevek osztályonként (min. 3 db)</h4>
+                <ul id="osztaly-lista" class="list-unstyled mb-0" style="line-height: 1.8;"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="doboz p-0 overflow-hidden">
+                <h4 class="p-3 mb-0 border-bottom">Családnevek listája</h4>
+                <div class="gorgetheto p-3 pt-0">
+                    <table class="table table-hover mb-0 mt-3">
+                        <thead>
+                            <tr>
+                                <th onclick="rendez('csaladnev', 'nev')">Név ↕</th>
+                                <th onclick="rendez('csaladnev', 'db')">Darab ↕</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-csaladnev"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="doboz p-0 overflow-hidden">
+                <h4 class="p-3 mb-0 border-bottom">Utónevek listája</h4>
+                <div class="gorgetheto p-3 pt-0">
+                    <table class="table table-hover mb-0 mt-3">
+                        <thead>
+                            <tr>
+                                <th onclick="rendez('utonev', 'nev')">Név ↕</th>
+                                <th onclick="rendez('utonev', 'db')">Darab ↕</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-utonev"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let csaladnevekTomb = [];
+    let utonevekTomb = [];
+    let utolsoRendezes = "";
+
+    fetch('nevek.txt')
+        .then(function(valasz) {
+            return valasz.arrayBuffer(); 
+        })
+        .then(function(buffer) {
+            let dekodolo = new TextDecoder('windows-1250');
+            let szoveg = dekodolo.decode(buffer);
+            feldolgoz(szoveg);
+        });
+
+    function feldolgoz(szoveg) {
+        let sorok = szoveg.split('\n');
+        let diakok = [];
+
+        for (let i = 0; i < sorok.length; i++) {
+            let sor = sorok[i].trim();
+            if (sor !== "") {
+                let adatok = sor.split(/\s+/);
+                diakok.push({
+                    osztaly: adatok[0],
+                    csaladnev: adatok[1],
+                    utonev1: adatok[2],
+                    utonev2: adatok[3]
+                });
+            }
+        }
+
+        function szamol(tomb) {
+            let stat = {};
+            for (let i = 0; i < tomb.length; i++) {
+                let szo = tomb[i];
+                if (szo !== undefined && szo !== null) {
+                    if (stat[szo] === undefined) {
+                        stat[szo] = 1;
+                    } else {
+                        stat[szo]++;
+                    }
+                }
+            }
+            return stat;
+        }
+
+        function leggyakoribb(statObjektum) {
+            let maxSzo = "";
+            let maxDb = 0;
+            for (let szo in statObjektum) {
+                if (statObjektum[szo] > maxDb) {
+                    maxDb = statObjektum[szo];
+                    maxSzo = szo;
+                }
+            }
+            return "<b>" + maxSzo + "</b> <span class='szam-kiemelo'>(" + maxDb + " db)</span>";
+        }
+
+        let csaladnevek = [];
+        let utonevek1 = [];
+        let utonevek2 = [];
+        let osszesUtonev = [];
+        let teljesNevek = [];
+
+        for (let i = 0; i < diakok.length; i++) {
+            let d = diakok[i];
+            csaladnevek.push(d.csaladnev);
+            utonevek1.push(d.utonev1);
+            osszesUtonev.push(d.utonev1);
+            teljesNevek.push(d.csaladnev + " " + d.utonev1);
+
+            if (d.utonev2 !== undefined) {
+                utonevek2.push(d.utonev2);
+                osszesUtonev.push(d.utonev2);
+                teljesNevek.push(d.csaladnev + " " + d.utonev2);
+            }
+        }
+
+        let csaladStat = szamol(csaladnevek);
+        let utonev1Stat = szamol(utonevek1);
+        let utonev2Stat = szamol(utonevek2);
+        let osszUtonevStat = szamol(osszesUtonev);
+        let teljesNevStat = szamol(teljesNevek);
+
+        document.getElementById('leg-csaladnev').innerHTML = leggyakoribb(csaladStat);
+        document.getElementById('leg-utonev1').innerHTML = leggyakoribb(utonev1Stat);
+        document.getElementById('leg-utonev2').innerHTML = leggyakoribb(utonev2Stat);
+        document.getElementById('leg-utonev-ossz').innerHTML = leggyakoribb(osszUtonevStat);
+
+        let nevLista = [];
+        for (let nev in teljesNevStat) {
+            nevLista.push({ nev: nev, db: teljesNevStat[nev] });
+        }
+        nevLista.sort(function(a, b) { return b.db - a.db; });
+
+        let top3html = "";
+        for (let i = 0; i < 3; i++) {
+            if (nevLista[i]) {
+                top3html += "<li>" + nevLista[i].nev + " <span class='szam-kiemelo'>(" + nevLista[i].db + " db)</span></li>";
+            }
+        }
+        document.getElementById('top3-lista').innerHTML = top3html;
+
+        let ritkaHtml = "";
+        for (let i = 0; i < nevLista.length; i++) {
+            if (nevLista[i].db === 1) {
+                ritkaHtml += "<span class='d-inline-block me-2 text-muted'>• " + nevLista[i].nev + "</span>";
+            }
+        }
+        document.getElementById('ritka-lista').innerHTML = ritkaHtml;
+
+        let gyakoriCsaladnevek = [];
+        for (let nev in csaladStat) {
+            if (csaladStat[nev] >= 3) {
+                gyakoriCsaladnevek.push({ nev: nev, db: csaladStat[nev] });
+            }
+        }
+        gyakoriCsaladnevek.sort(function(a, b) { return b.db - a.db; });
+
+        let osztalyHtml = "";
+        for (let i = 0; i < gyakoriCsaladnevek.length; i++) {
+            let cNev = gyakoriCsaladnevek[i].nev;
+            let db = gyakoriCsaladnevek[i].db;
+            
+            let osztalyok = [];
+            for (let j = 0; j < diakok.length; j++) {
+                if (diakok[j].csaladnev === cNev) {
+                    if (osztalyok.indexOf(diakok[j].osztaly) === -1) {
+                        osztalyok.push(diakok[j].osztaly);
+                    }
+                }
+            }
+            osztalyok.sort();
+            
+            osztalyHtml += "<li><b>" + cNev + "</b> <span class='szam-kiemelo'>(" + db + " db)</span>: <i>" + osztalyok.join(', ') + "</i></li>";
+        }
+        document.getElementById('osztaly-lista').innerHTML = osztalyHtml;
+
+        for (let nev in csaladStat) {
+            csaladnevekTomb.push({ nev: nev, db: csaladStat[nev] });
+        }
+        for (let nev in osszUtonevStat) {
+            utonevekTomb.push({ nev: nev, db: osszUtonevStat[nev] });
+        }
+
+        rendez('csaladnev', 'db');
+        rendez('utonev', 'db');
+    }
+
+    function rendez(tablaTipus, miSzerint) {
+        let tomb = (tablaTipus === 'csaladnev') ? csaladnevekTomb : utonevekTomb;
+
+        let novelo = true;
+        if (utolsoRendezes === miSzerint + "_no") {
+            novelo = false;
+            utolsoRendezes = miSzerint + "_csokken";
+        } else {
+            utolsoRendezes = miSzerint + "_no";
+        }
+
+        tomb.sort(function(a, b) {
+            if (miSzerint === 'nev') {
+                if (a.nev < b.nev) return novelo ? -1 : 1;
+                if (a.nev > b.nev) return novelo ? 1 : -1;
+                return 0;
+            } else {
+                return novelo ? a.db - b.db : b.db - a.db;
+            }
+        });
+
+        rajzolTabla(tablaTipus);
+    }
+
+    function rajzolTabla(tablaTipus) {
+        let tomb = (tablaTipus === 'csaladnev') ? csaladnevekTomb : utonevekTomb;
+        let tbodyId = (tablaTipus === 'csaladnev') ? 'tabla-csaladnev' : 'tabla-utonev';
+        let html = "";
+
+        for (let i = 0; i < tomb.length; i++) {
+            html += "<tr>";
+            html += "<td>" + tomb[i].nev + "</td>";
+            html += "<td class='szam-kiemelo'>" + tomb[i].db + "</td>";
+            html += "</tr>";
+        }
+
+        document.getElementById(tbodyId).innerHTML = html;
+    }
+</script>
+</body>
+</html>
